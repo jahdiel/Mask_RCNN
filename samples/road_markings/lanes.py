@@ -116,7 +116,7 @@ class LaneMarkingDataset(utils.Dataset):
             polygons = a['polygons']
 
             # load_mask() needs the image size to convert polygons to masks.
-            image_path = a['image_path']
+            image_path = os.path.join(dataset_dir, a['filename'])
             height, width = a['height'], a['width']
 
             self.add_image(
@@ -218,7 +218,7 @@ if __name__ == '__main__':
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description='Train Mask R-CNN to detect balloons.')
+        description='Train Mask R-CNN to detect road markings.')
     parser.add_argument("command",
                         metavar="<command>",
                         help="'train' or 'splash'")
