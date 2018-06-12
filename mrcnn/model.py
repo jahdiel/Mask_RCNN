@@ -1437,14 +1437,14 @@ def build_detection_targets(rpn_rois, gt_class_ids, gt_boxes, gt_masks, config):
             # Resize mini mask to size of GT box
             placeholder[gt_y1:gt_y2, gt_x1:gt_x2] = \
                 np.round(skimage.transform.resize(
-                    class_mask, (gt_h, gt_w), order=1, mode="constant")).astype(bool)
+                    class_mask, (gt_h, gt_w), order=1, anti_aliasing=True, mode="constant")).astype(bool)
             # Place the mini batch in the placeholder
             class_mask = placeholder
 
         # Pick part of the mask and resize it
         y1, x1, y2, x2 = rois[i].astype(np.int32)
         m = class_mask[y1:y2, x1:x2]
-        mask = skimage.transform.resize(m, config.MASK_SHAPE, order=1, mode="constant")
+        mask = skimage.transform.resize(m, config.MASK_SHAPE, order=1, anti_aliasing=True, mode="constant")
         masks[i, :, :, class_id] = mask
 
     return rois, roi_gt_class_ids, bboxes, masks
@@ -2087,10 +2087,15 @@ class MaskRCNN():
         """Modified version of the correspoding Keras function with
         the addition of multi-GPU support and the ability to exclude
         some layers from loading.
-        exlude: list of layer names to excluce
+        exlude: list of layer names to exclude
         """
         import h5py
         from keras.engine import topology
+
+        # if not hasattr(topology, "load_weights_from_hdf5_group_by_name"):
+        #     print("Warning: topology has no attribute: load_weights_from_hdf5_group_by_name")
+        #     print("Trying with keras.engine.saving module instead")
+        #     from keras.engine import saving as topology
 
         if exclude:
             by_name = True
@@ -2120,6 +2125,7 @@ class MaskRCNN():
 
         # Update the log directory
         self.set_log_dir(filepath)
+        
 
     def get_imagenet_weights(self):
         """Downloads ImageNet trained weights from Keras.
@@ -2335,6 +2341,12 @@ class MaskRCNN():
         else:
             workers = multiprocessing.cpu_count()
 
+        ###### Added by Jahdiel ###########
+        ''' Trying to fix error '''
+        workers = 1
+        use_multiprocessing = False
+        ################################### 
+
         self.keras_model.fit_generator(
             train_generator,
             initial_epoch=self.epoch,
@@ -2345,7 +2357,7 @@ class MaskRCNN():
             validation_steps=self.config.VALIDATION_STEPS,
             max_queue_size=100,
             workers=workers,
-            use_multiprocessing=True,
+            use_multiprocessing=use_multiprocessing, ####ORIGINAL: use_multiprocessing=True
         )
         self.epoch = max(self.epoch, epochs)
 

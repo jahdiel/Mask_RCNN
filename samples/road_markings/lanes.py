@@ -69,7 +69,12 @@ class MarkingsConfig(Config):
     NUM_CLASSES = 1 + 1  # Background + lanemarkings
 
     # Number of training steps per epoch
-    STEPS_PER_EPOCH = 10
+    STEPS_PER_EPOCH = 100
+
+    # Number of validation steps to run at the end of every training epoch.
+    # A bigger number improves accuracy of validation stats, but slows
+    # down the training.
+    VALIDATION_STEPS = 10
 
     # Skip detections with < 90% confidence
     DETECTION_MIN_CONFIDENCE = 0.9
@@ -105,7 +110,8 @@ class LaneMarkingDataset(utils.Dataset):
         #   'polygons' : [[[[736, 846]], [[736, 847]], ... , [[735, 848]], [[730, 848]]]]
         # }
         # We mostly care about the x and y coordinates of each region
-        annotations = json.load(open(os.path.join(dataset_dir, "ROMA_annotations.json")))
+        jsonFile = "ROMA_annotations_"+ subset +".json"
+        annotations = json.load(open(os.path.join(dataset_dir, jsonFile)))
         annotations = annotations["annotations"] # list of all the image info
 
         # Add images
@@ -116,7 +122,7 @@ class LaneMarkingDataset(utils.Dataset):
             polygons = a['polygons']
 
             # load_mask() needs the image size to convert polygons to masks.
-            image_path = a['image_path']
+            image_path = os.path.join(dataset_dir, a['filename'])
             height, width = a['height'], a['width']
 
             self.add_image(
@@ -176,6 +182,9 @@ def train(model):
     dataset_val.load_markings(args.dataset, "val")
     dataset_val.prepare()
 
+    # Training epochs
+    EPOCHS = 30
+
     # *** This training schedule is an example. Update to your needs ***
     # Since we're using a very small dataset, and starting from
     # COCO trained weights, we don't need to train too long. Also,
@@ -183,28 +192,10 @@ def train(model):
     print("Training network heads")
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
-                epochs=30,
+                epochs=EPOCHS,
                 layers='heads')
 
 
-def color_splash(image, mask):
-    """Apply color splash effect.
-    image: RGB image [height, width, 3]
-    mask: instance segmentation mask [height, width, instance count]
-
-    Returns result image.
-    """
-    # Make a grayscale copy of the image. The grayscale copy still
-    # has 3 RGB channels, though.
-    gray = skimage.color.gray2rgb(skimage.color.rgb2gray(image)) * 255
-    # Copy color pixels from the original color image where mask is set
-    if mask.shape[-1] > 0:
-        # We're treating all instances as one, so collapse the mask into one layer
-        mask = (np.sum(mask, -1, keepdims=True) >= 1)
-        splash = np.where(mask, image, gray).astype(np.uint8)
-    else:
-        splash = gray.astype(np.uint8)
-    return splash
 
 
 
@@ -218,7 +209,7 @@ if __name__ == '__main__':
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description='Train Mask R-CNN to detect balloons.')
+        description='Train Mask R-CNN to detect road markings.')
     parser.add_argument("command",
                         metavar="<command>",
                         help="'train' or 'splash'")
@@ -258,8 +249,8 @@ if __name__ == '__main__':
         class InferenceConfig(MarkingsConfig):
             # Set batch size to 1 since we'll be running inference on
             # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-            GPU_COUNT = 1
-            IMAGES_PER_GPU = 1
+            GPU_COUNT = 2
+            IMAGES_PER_GPU = 4
         config = InferenceConfig()
     config.display()
 
